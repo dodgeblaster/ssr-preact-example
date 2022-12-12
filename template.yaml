@@ -643,13 +643,11 @@ Metadata:
     Group3:
       Label: AuthService
       Members:
-        - Login
-        - UserPoolClient
-        - ValidateJwt
-        - UserPool
-        - UserPoolDomain
-        - AdminUser
         - RenderLogin
+        - ValidateJwt
+        - Login
+        - Group10
+        - AdminUser
     Group2:
       Label: Makering Service
       Members:
@@ -681,3 +679,14 @@ Metadata:
       Label: Frontend
       Members:
         - RenderGoals
+    Group9:
+      Label: CommonResources
+      Members:
+        - Group3
+        - FrontendApi
+    Group10:
+      Label: CognitoResources
+      Members:
+        - UserPool
+        - UserPoolClient
+        - UserPoolDomain
