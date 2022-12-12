@@ -1,0 +1,17 @@
+{
+    "name": "function",
+    "version": "1.0.0",
+    "type": "module",
+    "dependencies": {
+        "preact": "^10.11.3",
+        "preact-render-to-string": "^5.2.6"
+    },
+    "devDependencies": {
+        "esbuild": "^0.15.17"
+    },
+    "scripts": {
+        "build:client": "esbuild ./src/client.jsx --bundle --outfile=./out/client.js --platform=browser",
+        "build:lambda": "esbuild ./src/index.jsx --bundle --outfile=./out/index.js --platform=node --external:aws-sdk",
+        "build": "npm run build:client && npm run build:lambda"
+    }
+}

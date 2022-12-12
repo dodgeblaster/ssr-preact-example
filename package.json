@@ -1,0 +1,8 @@
+{
+    "scripts": {
+        "buildHome": "cd ./src/front/home && npm run build",
+        "buildGoals": "cd ./src/front/goals && npm run build",
+        "buildLogin": "echo \"no build step for login\"",
+        "deploy": "npm run buildHome && npm run buildGoals && npm run buildLogin && sam deploy"
+    }
+}

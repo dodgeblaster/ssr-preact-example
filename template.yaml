@@ -1,0 +1,683 @@
+Transform: AWS::Serverless-2016-10-31
+Parameters:
+  AdminEmail:
+    Type: String
+    Description: Email address for administrator
+    Default: garysjennings@gmail.com
+Resources:
+  RenderHome:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: RenderHome
+      CodeUri: src/front/home/out
+      Handler: index.handler
+      Runtime: nodejs16.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Events:
+        FrontendApiGET:
+          Type: Api
+          Properties:
+            Path: /
+            Method: GET
+            RestApiId: !Ref FrontendApi
+  RenderHomeLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${RenderHome}
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      AliasAttributes:
+        - email
+        - preferred_username
+      UserPoolName: !Sub ${AWS::StackName}-UserPool
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientName: !Sub ${AWS::StackName}-UserPoolClient
+      GenerateSecret: false
+      SupportedIdentityProviders:
+        - COGNITO
+      CallbackURLs:
+        - https://vn4ryp3ui6.execute-api.us-east-1.amazonaws.com/Prod/login
+      LogoutURLs:
+        - https://vn4ryp3ui6.execute-api.us-east-1.amazonaws.com/Prod/
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows:
+        - code
+        - implicit
+      AllowedOAuthScopes:
+        - email
+        - openid
+        - profile
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub ${AWS::StackName}-${AWS::AccountId}
+      UserPoolId: !Ref UserPool
+  AdminUser:
+    Type: AWS::Cognito::UserPoolUser
+    Properties:
+      DesiredDeliveryMediums:
+        - EMAIL
+      ForceAliasCreation: true
+      UserAttributes:
+        - Name: email
+          Value: !Ref AdminEmail
+      UserPoolId: !Ref UserPool
+  RenderLogin:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: RenderLogin
+      CodeUri: src/front/login
+      Handler: index.handler
+      Runtime: nodejs16.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Events:
+        FrontendApiGETlogin:
+          Type: Api
+          Properties:
+            Auth:
+              Authorizer: NONE
+            Path: /login
+            Method: GET
+            RestApiId: !Ref FrontendApi
+  RenderLoginLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${RenderLogin}
+  ValidateJwt:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: ValidateJwt
+      CodeUri: src/back/validateJwt
+      Handler: index.handler
+      Runtime: nodejs16.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          USER_POOL_ARN: !GetAtt UserPool.Arn
+          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:Admin*
+                - cognito-idp:DescribeIdentityProvider
+                - cognito-idp:DescribeResourceServer
+                - cognito-idp:DescribeUserPool
+                - cognito-idp:DescribeUserPoolClient
+                - cognito-idp:DescribeUserPoolDomain
+                - cognito-idp:GetGroup
+                - cognito-idp:ListGroups
+                - cognito-idp:ListUserPoolClients
+                - cognito-idp:ListUsers
+                - cognito-idp:ListUsersInGroup
+                - cognito-idp:UpdateGroup
+              Resource: !GetAtt UserPool.Arn
+  ValidateJwtLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ValidateJwt}
+  Login:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: Login
+      CodeUri: src/back/login
+      Handler: index.handler
+      Runtime: nodejs16.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Events:
+        FrontendApiPOSTlogin:
+          Type: Api
+          Properties:
+            Auth:
+              Authorizer: NONE
+            Path: /login
+            Method: POST
+            RestApiId: !Ref FrontendApi
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+  LoginLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${Login}
+  setGoal:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: setGoal
+      CodeUri: src/back/setGoal
+      Handler: index.handler
+      Runtime: nodejs16.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref GoalsTable
+          TABLE_ARN: !GetAtt GoalsTable.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GoalsTable
+      Events:
+        FrontendApiPOSTapisetGoal:
+          Type: Api
+          Properties:
+            Path: /api/setGoal
+            Method: POST
+            RestApiId: !Ref FrontendApi
+  setGoalLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${setGoal}
+  RenderGoals:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: RenderGoals
+      CodeUri: src/front/goals/out
+      Handler: index.handler
+      Runtime: nodejs16.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref GoalsTable
+          TABLE_ARN: !GetAtt GoalsTable.Arn
+          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+          USER_POOL_ID: !Ref UserPool
+          USER_POOL_ARN: !GetAtt UserPool.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GoalsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:Admin*
+                - cognito-idp:DescribeIdentityProvider
+                - cognito-idp:DescribeResourceServer
+                - cognito-idp:DescribeUserPool
+                - cognito-idp:DescribeUserPoolClient
+                - cognito-idp:DescribeUserPoolDomain
+                - cognito-idp:GetGroup
+                - cognito-idp:ListGroups
+                - cognito-idp:ListUserPoolClients
+                - cognito-idp:ListUsers
+                - cognito-idp:ListUsersInGroup
+                - cognito-idp:UpdateGroup
+              Resource: !GetAtt UserPool.Arn
+      Events:
+        FrontendApiGETgoals:
+          Type: Api
+          Properties:
+            Path: /goals
+            Method: GET
+            RestApiId: !Ref FrontendApi
+  RenderGoalsLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${RenderGoals}
+  removeGoal:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: removeGoal
+      CodeUri: src/back/removeGoal
+      Handler: index.handler
+      Runtime: nodejs16.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref GoalsTable
+          TABLE_ARN: !GetAtt GoalsTable.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GoalsTable
+      Events:
+        FrontendApiPOSTapiremoveGoal:
+          Type: Api
+          Properties:
+            Path: /api/removeGoal
+            Method: POST
+            RestApiId: !Ref FrontendApi
+  removeGoalLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${removeGoal}
+  RenderProfile:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: RenderProfile
+      CodeUri: src/front/profile
+      Handler: index.handler
+      Runtime: nodejs16.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Events:
+        FrontendApiGETprofile:
+          Type: Api
+          Properties:
+            Path: /profile
+            Method: GET
+            RestApiId: !Ref FrontendApi
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ProfileTable
+          TABLE_ARN: !GetAtt ProfileTable.Arn
+          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+          USER_POOL_ID: !Ref UserPool
+          USER_POOL_ARN: !GetAtt UserPool.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProfileTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:Admin*
+                - cognito-idp:DescribeIdentityProvider
+                - cognito-idp:DescribeResourceServer
+                - cognito-idp:DescribeUserPool
+                - cognito-idp:DescribeUserPoolClient
+                - cognito-idp:DescribeUserPoolDomain
+                - cognito-idp:GetGroup
+                - cognito-idp:ListGroups
+                - cognito-idp:ListUserPoolClients
+                - cognito-idp:ListUsers
+                - cognito-idp:ListUsersInGroup
+                - cognito-idp:UpdateGroup
+              Resource: !GetAtt UserPool.Arn
+  RenderProfileLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${RenderProfile}
+  ProfileTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+  setProfileName:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: setProfileName
+      CodeUri: src/back/setProfileName
+      Handler: index.handler
+      Runtime: nodejs16.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ProfileTable
+          TABLE_ARN: !GetAtt ProfileTable.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProfileTable
+      Events:
+        FrontendApiPOSTapisetProfileName:
+          Type: Api
+          Properties:
+            Path: /api/setProfileName
+            Method: POST
+            RestApiId: !Ref FrontendApi
+  setProfileNameLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${setProfileName}
+  setProfileLocation:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: setProfileLocation
+      CodeUri: src/back/setProfileLocation
+      Handler: index.handler
+      Runtime: nodejs16.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ProfileTable
+          TABLE_ARN: !GetAtt ProfileTable.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProfileTable
+      Events:
+        FrontendApiPOSTapisetProfileLocation:
+          Type: Api
+          Properties:
+            Path: /api/setProfileLocation
+            Method: POST
+            RestApiId: !Ref FrontendApi
+  setProfileLocationLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${setProfileLocation}
+  FrontendApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub
+        - ${ResourceName} From Stack ${AWS::StackName}
+        - ResourceName: FrontendApi
+      StageName: Prod
+      DefinitionBody:
+        openapi: 3.0.1
+        info:
+          title: !Ref AWS::StackName
+          version: 0.0.1
+        x-amazon-apigateway-importexport-version: 1
+        paths:
+          /:
+            get:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RenderHome.Arn}/invocations
+              responses: {}
+          /login:
+            get:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RenderLogin.Arn}/invocations
+              responses: {}
+              security:
+                - NONE: []
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${Login.Arn}/invocations
+              responses: {}
+              security:
+                - NONE: []
+          /goals:
+            get:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RenderGoals.Arn}/invocations
+              responses: {}
+          /profile:
+            get:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RenderProfile.Arn}/invocations
+              responses: {}
+          /api/setProfileName:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${setProfileName.Arn}/invocations
+              responses: {}
+          /api/setProfileLocation:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${setProfileLocation.Arn}/invocations
+              responses: {}
+          /api/setGoal:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${setGoal.Arn}/invocations
+              responses: {}
+          /api/removeGoal:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${removeGoal.Arn}/invocations
+              responses: {}
+          /api/addEvent:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${addEvent.Arn}/invocations
+              responses: {}
+          /api/updateEvent:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${updateEvent.Arn}/invocations
+              responses: {}
+          /api/removeEvent:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${removeEvent.Arn}/invocations
+              responses: {}
+      EndpointConfiguration: REGIONAL
+      TracingEnabled: true
+      Auth:
+        Authorizers:
+          MyAuth:
+            FunctionPayloadType: REQUEST
+            FunctionArn: !GetAtt ValidateJwt.Arn
+            Identity:
+              Headers:
+                - cookie
+        DefaultAuthorizer: MyAuth
+  GoalsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+  addEvent:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: addEvent
+      CodeUri: src/back/addEvent
+      Handler: index.handler
+      Runtime: nodejs16.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref GoalsTable
+          TABLE_ARN: !GetAtt GoalsTable.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GoalsTable
+      Events:
+        FrontendApiPOSTapiaddEvent:
+          Type: Api
+          Properties:
+            Path: /api/addEvent
+            Method: POST
+            RestApiId: !Ref FrontendApi
+  addEventLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${addEvent}
+  updateEvent:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: updateEvent
+      CodeUri: src/back/updateEvent
+      Handler: index.handler
+      Runtime: nodejs16.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref GoalsTable
+          TABLE_ARN: !GetAtt GoalsTable.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GoalsTable
+      Events:
+        FrontendApiPOSTapiupdateEvent:
+          Type: Api
+          Properties:
+            Path: /api/updateEvent
+            Method: POST
+            RestApiId: !Ref FrontendApi
+  updateEventLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${updateEvent}
+  removeEvent:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: removeEvent
+      CodeUri: src/back/removeEvent
+      Handler: index.handler
+      Runtime: nodejs16.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref GoalsTable
+          TABLE_ARN: !GetAtt GoalsTable.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GoalsTable
+      Events:
+        FrontendApiPOSTapiremoveEvent:
+          Type: Api
+          Properties:
+            Path: /api/removeEvent
+            Method: POST
+            RestApiId: !Ref FrontendApi
+  removeEventLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${removeEvent}
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL for Prod stage for Multiply function
+    Value: !Sub https://${FrontendApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/
+Metadata:
+  AWS::Composer::Groups:
+    Group:
+      Label: GoalsService
+      Members:
+        - GoalsTable
+        - Group7
+        - Group8
+    Group3:
+      Label: AuthService
+      Members:
+        - Login
+        - UserPoolClient
+        - ValidateJwt
+        - UserPool
+        - UserPoolDomain
+        - AdminUser
+        - RenderLogin
+    Group2:
+      Label: Makering Service
+      Members:
+        - RenderHome
+    Group4:
+      Label: ProfileService
+      Members:
+        - ProfileTable
+        - Group6
+        - Group5
+    Group5:
+      Label: Frontend
+      Members:
+        - RenderProfile
+    Group6:
+      Label: Backend
+      Members:
+        - setProfileName
+        - setProfileLocation
+    Group7:
+      Label: Backend
+      Members:
+        - setGoal
+        - removeGoal
+        - addEvent
+        - updateEvent
+        - removeEvent
+    Group8:
+      Label: Frontend
+      Members:
+        - RenderGoals
